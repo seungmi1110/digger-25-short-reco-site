@@ -1,0 +1,38 @@
+<!doctype html><meta charset="utf-8">
+<title>공매도 Top200 추천</title>
+<style>
+body{font-family:sans-serif;max-width:1000px;margin:24px auto;padding:0 12px}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;font-size:14px}
+th{background:#f7f7f7;text-align:left}.badge{padding:2px 8px;background:#eee;border-radius:6px}
+</style>
+<h1>공매도 Top200 추천 <span id="date" class="badge">-</span></h1>
+<div id="banner" style="margin:8px 0 16px;color:#666;"></div>
+<div style="margin-bottom:12px;">
+  날짜 선택: <select id="dateSelect"></select>
+  <button id="loadBtn">불러오기</button>
+  <button id="loadLatestBtn">최신 보기</button>
+  <button id="downloadCsvBtn">CSV 다운로드</button>
+</div>
+<table id="tbl"><thead><tr>
+<th>#</th><th>코드</th><th>종목명</th><th>RSI(14)</th><th>14D 수익률</th><th>공잔비(%)</th><th>외/기관 3일 음수</th><th>통과</th>
+</tr></thead><tbody></tbody></table>
+<script>
+const BASE='./public/data';
+const f=async p=>(await fetch(p+'?t='+Date.now())).json();
+function toPct(x){return x==null?'':(Math.round(x*1000)/10)+'%'}
+function renderOptions(d,latest){const s=document.getElementById('dateSelect');s.innerHTML=d.map(x=>`<option>${x}</option>`).join(''); if(latest&&d.includes(latest)) s.value=latest}
+function renderTable(items){const tb=document.querySelector('#tbl tbody');tb.innerHTML=items.map((it,i)=>`
+<tr><td>${i+1}</td><td>${it.code||''}</td><td>${it.name||''}</td><td>${it.rsi_14??''}</td>
+<td>${it.ret_14d!=null?toPct(it.ret_14d):''}</td><td>${it.short_balance_ratio??''}</td>
+<td>${(it.neg_days_foreign>=3&&it.neg_days_inst>=3)?'Y':'N'}</td><td>${it.passed?'✅':''}</td></tr>`).join('')}
+function toCSV(items){const cols=["rank","code","name","rsi_14","ret_14d","short_balance_ratio","neg_days_foreign","neg_days_inst","passed"];
+return [cols.join(',')].concat(items.map((x,i)=>[i+1,x.code,x.name,x.rsi_14,x.ret_14d,x.short_balance_ratio,x.neg_days_foreign,x.neg_days_inst,x.passed].join(','))).join('\n')}
+async function loadRun(d='latest'){const base=`${BASE}/${d}`; const meta=await f(`${base}/meta.json`); const recs=await f(`${base}/recommendations.json`);
+document.getElementById('date').textContent=meta.run_date||'(없음)'; renderTable(recs);
+document.getElementById('downloadCsvBtn').onclick=()=>{const csv=toCSV(recs); const blob=new Blob([csv],{type:'text/csv'}); const url=URL.createObjectURL(blob);
+const a=Object.assign(document.createElement('a'),{href:url,download:`reco_${meta.run_date||'unknown'}.csv`}); document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url)}}
+async function init(){const m=await f(`${BASE}/index.json`); renderOptions(m.available_dates||[], m.latest_run_date);
+const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'}); if(m.latest_run_date&&m.latest_run_date!==today){document.getElementById('banner').textContent=`참고: 최신 스냅샷은 ${m.latest_run_date} 입니다.`}
+await loadRun('latest'); document.getElementById('loadBtn').onclick=()=>loadRun(document.getElementById('dateSelect').value); document.getElementById('loadLatestBtn').onclick=()=>loadRun('latest')}
+init();
+</script>
