@@ -56,11 +56,11 @@ COL_FLAG = "외인기관3일연속순매도"
 
 # ====== Kiwoom 로그인 정보 ======
 credentials = {
-    'user_id': 'asdf2262',
-    'user_password': '990523ok',
-    'cert_password': '990523ok',
+    'user_id': os.getenv('KIWOOM_ID'),
+    'user_password': os.getenv('KIWOOM_PW'),
+    'cert_password': os.getenv('KIWOOM_CERT_PW'),
     'is_simulation': True,
-    'account_passwords': {'0000000000': '0000'}
+    'account_passwords': { os.getenv('KIWOOM_ACCT','0000000000'): os.getenv('KIWOOM_ACCT_PW') }
 }
 
 # ====== 투자자 연속 순매도 체크 함수 ======
