@@ -1,3 +1,21 @@
+<!doctype html><meta charset="utf-8">
+<title>공매도 Top200 추천</title>
+<style>
+body{font-family:sans-serif;max-width:1000px;margin:24px auto;padding:0 12px}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;font-size:14px}
+th{background:#f7f7f7;text-align:left}.badge{padding:2px 8px;background:#eee;border-radius:6px}
+</style>
+<h1>공매도 Top200 추천 <span id="date" class="badge">-</span></h1>
+<div id="banner" style="margin:8px 0 16px;color:#666;"></div>
+<div style="margin-bottom:12px;">
+  날짜 선택: <select id="dateSelect"></select>
+  <button id="loadBtn">불러오기</button>
+  <button id="loadLatestBtn">최신 보기</button>
+  <button id="downloadCsvBtn">CSV 다운로드</button>
+</div>
+<table id="tbl"><thead><tr>
+<th>#</th><th>코드</th><th>종목명</th><th>RSI(14)</th><th>14D 수익률</th><th>공잔비(%)</th><th>외/기관 3일 음수</th><th>통과</th>
+</tr></thead><tbody></tbody></table>
 <script>
 const BASE = './public/data/latest';
 
@@ -132,4 +150,3 @@ async function init(){
 }
 init();
 </script>
-
