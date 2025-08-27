@@ -17,7 +17,7 @@ th{background:#f7f7f7;text-align:left}.badge{padding:2px 8px;background:#eee;bor
 <th>#</th><th>코드</th><th>종목명</th><th>RSI(14)</th><th>14D 수익률</th><th>공잔비(%)</th><th>외/기관 3일 음수</th><th>통과</th>
 </tr></thead><tbody></tbody></table>
 <script>
-const BASE = './public/data/latest';
+const BASE = './public/data';
 
 /* ---------- CSV 파서(따옴표/콤마 안전) ---------- */
 function parseCSV(text){
@@ -150,3 +150,4 @@ async function init(){
 }
 init();
 </script>
+
