@@ -1,78 +1,133 @@
-<!doctype html><meta charset="utf-8">
-<title>공매도 Top200 추천</title>
-<style>
-body{font-family:sans-serif;max-width:1000px;margin:24px auto;padding:0 12px}
-table{border-collapse:collapse;width:100%}th,td{border:1px solid #ddd;padding:8px;font-size:14px}
-th{background:#f7f7f7;text-align:left}.badge{padding:2px 8px;background:#eee;border-radius:6px}
-</style>
-<h1>공매도 Top200 추천 <span id="date" class="badge">-</span></h1>
-<div id="banner" style="margin:8px 0 16px;color:#666;"></div>
-<div style="margin-bottom:12px;">
-  날짜 선택: <select id="dateSelect"></select>
-  <button id="loadBtn">불러오기</button>
-  <button id="loadLatestBtn">최신 보기</button>
-  <button id="downloadCsvBtn">CSV 다운로드</button>
-</div>
-<table id="tbl"><thead><tr>
-<th>#</th><th>코드</th><th>종목명</th><th>RSI(14)</th><th>14D 수익률</th><th>공잔비(%)</th><th>외/기관 3일 음수</th><th>통과</th>
-</tr></thead><tbody></tbody></table>
 <script>
-const BASE='./public/data';
+const BASE = './public/data';
 
-// CSV 파서 (간단 버전)
+/* ---------- CSV 파서(따옴표/콤마 안전) ---------- */
 function parseCSV(text){
-  const lines=text.trim().split('\n');
-  const header=lines[0].split(',');
-  return lines.slice(1).map(l=>{
-    const cols=l.split(',');
-    let obj={};
-    header.forEach((h,i)=>obj[h]=cols[i]);
-    return obj;
+  // BOM 제거
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+  const out = [];
+  let row = [], cell = '', inQ = false;
+  for (let i=0;i<text.length;i++){
+    const ch = text[i], next = text[i+1];
+    if (inQ){
+      if (ch === '"' && next === '"'){ cell += '"'; i++; }
+      else if (ch === '"'){ inQ = false; }
+      else { cell += ch; }
+    } else {
+      if (ch === '"'){ inQ = true; }
+      else if (ch === ','){ row.push(cell); cell = ''; }
+      else if (ch === '\n'){
+        row.push(cell); out.push(row); row=[]; cell='';
+      } else if (ch === '\r'){ /* skip */ }
+      else { cell += ch; }
+    }
+  }
+  if (cell.length>0 || row.length>0){ row.push(cell); out.push(row); }
+  const header = out.shift() || [];
+  return out.map(r => {
+    const o = {};
+    header.forEach((h, i) => o[h] = r[i] ?? '');
+    return o;
   });
 }
-function toPct(x){return x==null||x==''?'':(Math.round(parseFloat(x)*1000)/10)+'%'}
-function renderOptions(d,latest){
-  const s=document.getElementById('dateSelect');
-  s.innerHTML=d.map(x=>`<option>${x}</option>`).join('');
-  if(latest&&d.includes(latest)) s.value=latest
-}
-function renderTable(items){
-  const tb=document.querySelector('#tbl tbody');
-  tb.innerHTML=items.map((it,i)=>`
-<tr><td>${i+1}</td><td>${it.종목코드||it.code||''}</td><td>${it.종목명||it.name||''}</td>
-<td>${it.rsi14||it.rsi_14||''}</td>
-<td>${it.ret14_pct?toPct(it.ret14_pct/100): (it.ret_14d?toPct(it.ret_14d):'')}</td>
-<td>${it["공매도 비중"]||it.short_balance_ratio||''}</td>
-<td>${(it.neg_days_foreign>=3&&it.neg_days_inst>=3)?'Y':'N'}</td>
-<td>${it.passed?'✅':''}</td></tr>`).join('')
+
+/* ---------- 유틸 ---------- */
+const num = v => {
+  if (v === null || v === undefined) return null;
+  const t = (''+v).replace(/,/g,'').trim();
+  const n = parseFloat(t);
+  return isFinite(n) ? n : null;
+};
+const pct = v => v==null ? '' : `${v.toFixed(2)}%`;
+const pad6 = s => (''+s).padStart(6,'0');
+const yesno = v => {
+  if (typeof v === 'boolean') return v ? 'Y' : 'N';
+  const t = (''+v).toLowerCase();
+  return (t==='true'||t==='y'||t==='1') ? 'Y' : (t==='false'||t==='n'||t==='0') ? 'N' : '';
+};
+
+/* ---------- 옵션 렌더 ---------- */
+function renderOptions(dates, latest){
+  const s = document.getElementById('dateSelect');
+  s.innerHTML = (dates||[]).map(x=>`<option>${x}</option>`).join('');
+  if (latest && dates.includes(latest)) s.value = latest;
 }
 
+/* ---------- 테이블 렌더 ---------- */
+function renderTable(rows){
+  const tb = document.querySelector('#tbl tbody');
+  tb.innerHTML = rows.map((it,i)=>{
+    const code = pad6(it['종목코드'] || it.code || '');
+    const name = it['종목명'] || it.name || it['한글명'] || '';
+    const rsi14 = num(it.rsi14);
+    const ret14 = num(it.ret14_pct);
+    const shortRatio = num(it['공매도 비중']); // 공잔비(%)
+    const fi3 = it['외인기관3일연속순매도'];   // True/False 또는 공백
+    // recommendations.csv는 이미 최종 통과본이므로 passed=✅
+    return `<tr>
+      <td>${i+1}</td>
+      <td>${code}</td>
+      <td>${name}</td>
+      <td>${rsi14==null?'':rsi14.toFixed(1)}</td>
+      <td>${ret14==null?'':pct(ret14)}</td>
+      <td>${shortRatio==null?'':shortRatio.toFixed(2)}</td>
+      <td>${yesno(fi3)}</td>
+      <td>✅</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ---------- 실행 ---------- */
 async function loadRun(d='latest'){
-  const base=`${BASE}/${d}`;
-  const meta=await fetch(`${base}/meta.json?t=${Date.now()}`).then(r=>r.json());
-  const csv=await fetch(`${base}/recommendations.csv?t=${Date.now()}`).then(r=>r.text());
-  const recs=parseCSV(csv);
+  const base = `${BASE}/${d}`;
+  // meta.json이 없을 수도 있으니 안전 처리
+  let runDateLabel = (d==='latest') ? 'latest' : d;
+  try{
+    const metaResp = await fetch(`${base}/meta.json?t=${Date.now()}`);
+    if (metaResp.ok){
+      const meta = await metaResp.json();
+      runDateLabel = meta.run_date || runDateLabel;
+    }
+  }catch(e){ /* ignore */ }
 
-  document.getElementById('date').textContent=meta.run_date||'(없음)';
+  // recommendations.csv 로드
+  const csv = await fetch(`${base}/recommendations.csv?t=${Date.now()}`).then(r=>{
+    if(!r.ok) throw new Error('recommendations.csv not found');
+    return r.text();
+  });
+  const recs = parseCSV(csv);
+
+  document.getElementById('date').textContent = runDateLabel;
   renderTable(recs);
 
+  // 다운로드 버튼
   document.getElementById('downloadCsvBtn').onclick=()=>{
-    const blob=new Blob([csv],{type:'text/csv'});
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
     const url=URL.createObjectURL(blob);
-    const a=Object.assign(document.createElement('a'),{href:url,download:`reco_${meta.run_date||'unknown'}.csv`});
+    const a=Object.assign(document.createElement('a'),{
+      href:url,download:`reco_${runDateLabel}.csv`
+    });
     document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
-  }
+  };
 }
 
 async function init(){
-  const m=await fetch(`${BASE}/index.json?t=${Date.now()}`).then(r=>r.json());
-  renderOptions(m.available_dates||[], m.latest_run_date);
-  const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
-  if(m.latest_run_date&&m.latest_run_date!==today){
-    document.getElementById('banner').textContent=`참고: 최신 스냅샷은 ${m.latest_run_date} 입니다.`;
-  }
+  // 날짜 목록(index.json이 있으면 사용, 없으면 셀렉터 비워둠)
+  try{
+    const m = await fetch(`${BASE}/index.json?t=${Date.now()}`).then(r=>r.ok?r.json():({}));
+    renderOptions(m.available_dates||[], m.latest_run_date);
+    const today = new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Seoul'});
+    if(m.latest_run_date && m.latest_run_date!==today){
+      document.getElementById('banner').textContent = `참고: 최신 스냅샷은 ${m.latest_run_date} 입니다.`;
+    }
+  }catch(e){ /* ignore */ }
+
   await loadRun('latest');
-  document.getElementById('loadBtn').onclick=()=>loadRun(document.getElementById('dateSelect').value);
+
+  document.getElementById('loadBtn').onclick=()=>{
+    const sel = document.getElementById('dateSelect').value;
+    if (sel) loadRun(sel);
+  };
   document.getElementById('loadLatestBtn').onclick=()=>loadRun('latest');
 }
 init();
