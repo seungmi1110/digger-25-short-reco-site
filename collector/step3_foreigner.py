@@ -119,6 +119,15 @@ def main():
         raise KeyError("candidates_filtered1.csv 에 '종목코드' 컬럼이 없습니다.")
     df_filt1["종목코드"] = df_filt1["종목코드"].astype(str).str.zfill(6)
 
+    # ✅ 만약 비어 있으면 recommendations.csv 빈 파일 생성 후 종료
+    if df_filt1.empty:
+        print("[INFO] candidates_filtered1.csv 가 비어 있음 → 빈 recommendations.csv 생성")
+        # 빈 DataFrame 동일 구조로 생성
+        empty_df = pd.DataFrame(columns=df_filt1.columns.tolist() + [COL_FLAG])
+        empty_df.to_csv(OUT_RECO_LATEST, index=False, encoding="utf-8-sig")
+        empty_df.to_csv(OUT_RECO_DATED,  index=False, encoding="utf-8-sig")
+        return
+
     # 2) 해당 리스트에 대해서만 투자자 조건 평가
     flags = []  # [{"종목코드": "005930", COL_FLAG: True/False}, ...]
     with KiwoomOpenApiPlusEntrypoint() as ep:
